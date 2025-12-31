@@ -1,0 +1,6 @@
+# API server dependencies
+-r requirements-base.txt
+
+# Additional API-specific packages
+python-multipart==0.0.6
+sse-starlette==1.8.2

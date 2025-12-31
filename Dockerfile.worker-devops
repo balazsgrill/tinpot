@@ -1,0 +1,35 @@
+FROM python:3.11-slim
+
+WORKDIR /opt/tinpot
+
+# Install system dependencies for DevOps tasks
+RUN apt-get update && \
+    apt-get install -y \
+    curl \
+    git \
+    openssh-client \
+    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install base dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install DevOps-specific Python packages
+RUN pip install --no-cache-dir \
+    docker==7.0.0 \
+    paramiko==3.4.0 \
+    gitpython==3.1.40
+
+# Copy application code
+COPY app/ ./app/
+COPY actions/ ./actions/
+COPY static/ ./static/
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV REDIS_URL=redis://redis:6379
+ENV ACTIONS_DIR=/opt/tinpot/actions
+
+# Default command
+CMD ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=2", "-Q", "devops"]

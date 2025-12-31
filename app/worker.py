@@ -100,8 +100,27 @@ def init_worker(**kwargs):
 
 def init_worker_process(**kwargs):
     """Called when each worker process starts (after fork)."""
+    # Get action group filter from environment
+    action_groups_env = os.environ.get('ACTION_GROUPS', '')
+    action_groups = [g.strip() for g in action_groups_env.split(',') if g.strip()]
+    
     # Re-discover actions in each worker process
     discover_actions(ACTIONS_DIR)
+    
+    # Filter actions by group if specified
+    if action_groups:
+        from tinpot.decorators import ACTION_REGISTRY
+        filtered_registry = {
+            name: info 
+            for name, info in ACTION_REGISTRY.items()
+            if info['group'] in action_groups
+        }
+        ACTION_REGISTRY.clear()
+        ACTION_REGISTRY.update(filtered_registry)
+        
+        worker_name = os.environ.get('WORKER_NAME', 'worker')
+        print(f"[{worker_name}] Filtered to groups: {action_groups}")
+        print(f"[{worker_name}] Loaded {len(ACTION_REGISTRY)} actions: {list(ACTION_REGISTRY.keys())}")
     
     # Setup logging in each worker process
     setup_logging(REDIS_URL)

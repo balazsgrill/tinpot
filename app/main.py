@@ -79,6 +79,48 @@ async def root():
     """)
 
 
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint for load balancers and monitoring.
+    Returns 200 if service is healthy, 503 if unhealthy.
+    """
+    try:
+        # Check Redis connection
+        import redis as redis_lib
+        redis_client = redis_lib.from_url(REDIS_URL)
+        redis_client.ping()
+        return {
+            "status": "healthy",
+            "redis": "connected",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Service unhealthy: {str(e)}"
+        )
+
+
+@app.get("/ready")
+async def readiness_check():
+    """
+    Readiness check - ensures actions are loaded and service is ready to serve requests.
+    """
+    if len(ACTION_REGISTRY) == 0:
+        raise HTTPException(
+            status_code=503,
+            detail="Not ready: No actions loaded"
+        )
+    
+    return {
+        "status": "ready",
+        "actions_count": len(ACTION_REGISTRY),
+        "actions": list(ACTION_REGISTRY.keys()),
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
 @app.get("/api/actions")
 async def get_actions():
     """List all available actions with their metadata."""
@@ -95,10 +137,15 @@ async def execute_action(action_name: str, request: ExecuteActionRequest):
     if action_name not in ACTION_REGISTRY:
         raise HTTPException(status_code=404, detail=f"Action not found: {action_name}")
     
-    # Submit task to Celery
+    # Get action metadata including queue
+    action_info = ACTION_REGISTRY[action_name]
+    queue_name = action_info.get('queue', 'default')
+    
+    # Submit task to Celery with queue routing
     task = celery_app.send_task(
         'tinpot.execute_action',
         args=[action_name, request.parameters],
+        queue=queue_name,
     )
     
     return ExecutionResponse(

@@ -1,0 +1,6 @@
+# Core dependencies shared by all components
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+celery[redis]==5.3.4
+redis==4.5.4
+pydantic==2.5.3

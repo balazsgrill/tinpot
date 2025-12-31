@@ -17,6 +17,7 @@ def action(
     name: Optional[str] = None,
     group: Optional[str] = "General",
     description: Optional[str] = None,
+    queue: str = "default",
 ):
     """
     Decorator to mark a function as a Tinpot action.
@@ -25,9 +26,10 @@ def action(
         name: Display name (defaults to function name)
         group: Category/group for UI organization
         description: Help text for the action
+        queue: Celery queue name for routing to specific workers (default: "default")
         
     Example:
-        @action(group="DevOps", description="Deploy the application")
+        @action(group="DevOps", queue="devops", description="Deploy the application")
         def deploy_app(environment: str = "staging"):
             print(f"Deploying to {environment}")
     """
@@ -59,6 +61,7 @@ def action(
             "function": func,
             "parameters": parameters,
             "module": func.__module__,
+            "queue": queue,
         }
         
         # Return the original function (Celery task wrapping happens later in worker.py)
