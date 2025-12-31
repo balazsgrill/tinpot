@@ -17,7 +17,7 @@ def action(
     name: Optional[str] = None,
     group: Optional[str] = "General",
     description: Optional[str] = None,
-    queue: str = "default",
+    queue: str = "celery",  # Default Celery queue name
 ):
     """
     Decorator to mark a function as a Tinpot action.

@@ -2,6 +2,8 @@
 
 This guide covers deploying Tinpot components as separate services on different nodes without Docker.
 
+**For subpath deployment** (e.g., `https://example.com/tinpot/`), see [SUBPATH_DEPLOYMENT.md](SUBPATH_DEPLOYMENT.md).
+
 ## Architecture Overview
 
 ```
@@ -478,6 +480,8 @@ sudo systemctl start tinpot-worker-devops
 
 ### Nginx Configuration
 
+#### Option 1: Root Path Deployment
+
 **File:** `/etc/nginx/sites-available/tinpot`
 
 ```nginx
@@ -557,6 +561,157 @@ server {
         expires 1h;
         add_header Cache-Control "public, immutable";
     }
+}
+```
+
+#### Option 2: Subpath Deployment
+
+Deploy Tinpot under a subpath like `https://yourdomain.com/tinpot/`
+
+**File:** `/etc/nginx/sites-available/yourdomain`
+
+```nginx
+upstream tinpot_api {
+    server api-node1:8000;
+    server api-node2:8000;
+    
+    least_conn;
+    keepalive 32;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name yourdomain.com;
+
+    # SSL configuration
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+    
+    # ... other locations for other apps ...
+    
+    # Tinpot on /tinpot/ subpath
+    location /tinpot/ {
+        # Rewrite path - remove /tinpot prefix before proxying
+        rewrite ^/tinpot/(.*)$ /$1 break;
+        
+        proxy_pass http://tinpot_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /tinpot;
+        
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+    
+    # SSE streaming for subpath
+    location /tinpot/api/executions/ {
+        rewrite ^/tinpot/(.*)$ /$1 break;
+        
+        proxy_pass http://tinpot_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /tinpot;
+        
+        # SSE specific
+        proxy_set_header Connection '';
+        proxy_http_version 1.1;
+        chunked_transfer_encoding off;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+    }
+    
+    # Static files on subpath
+    location /tinpot/static/ {
+        rewrite ^/tinpot/(.*)$ /$1 break;
+        
+        proxy_pass http://tinpot_api;
+        proxy_set_header X-Forwarded-Prefix /tinpot;
+        proxy_cache_valid 200 1h;
+        expires 1h;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
+
+**Configure FastAPI for Subpath:**
+
+Update `/opt/tinpot/api.env`:
+
+```bash
+# Add root_path for subpath deployment
+ROOT_PATH=/tinpot
+```
+
+Update systemd service `/etc/systemd/system/tinpot-api.service`:
+
+```ini
+ExecStart=/opt/tinpot/venv/bin/uvicorn app.main:app \
+    --host ${HOST} \
+    --port ${PORT} \
+    --workers ${WORKERS} \
+    --log-level ${LOG_LEVEL} \
+    --root-path ${ROOT_PATH}
+```
+
+Or update `app/main.py` directly:
+
+```python
+import os
+
+app = FastAPI(
+    title="Tinpot",
+    version="1.0",
+    root_path=os.environ.get("ROOT_PATH", ""),  # Enable subpath support
+)
+```
+
+**Update Frontend for Subpath:**
+
+Update `static/index.html` to use relative URLs:
+
+```javascript
+// Change absolute paths
+fetch('/api/actions')
+
+// To relative paths (automatically includes root_path)
+fetch('api/actions')
+
+// Or get root path from window.location
+const basePath = window.location.pathname.split('/').slice(0, -1).join('/') || '';
+fetch(`${basePath}/api/actions`)
+```
+
+#### Option 3: Multiple Instances on Different Subpaths
+
+Run multiple Tinpot instances on different subpaths:
+
+```nginx
+# Production instance
+location /tinpot/ {
+    rewrite ^/tinpot/(.*)$ /$1 break;
+    proxy_pass http://tinpot_prod_api;
+    proxy_set_header X-Forwarded-Prefix /tinpot;
+}
+
+# Staging instance
+location /tinpot-staging/ {
+    rewrite ^/tinpot-staging/(.*)$ /$1 break;
+    proxy_pass http://tinpot_staging_api;
+    proxy_set_header X-Forwarded-Prefix /tinpot-staging;
+}
+
+# Development instance
+location /tinpot-dev/ {
+    rewrite ^/tinpot-dev/(.*)$ /$1 break;
+    proxy_pass http://tinpot_dev_api;
+    proxy_set_header X-Forwarded-Prefix /tinpot-dev;
 }
 ```
 

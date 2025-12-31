@@ -119,6 +119,13 @@ Environment variables:
 
 - `REDIS_URL`: Redis connection URL (default: `redis://localhost:6379`)
 - `ACTIONS_DIR`: Path to actions directory (default: `/opt/tinpot/actions`)
+- `ROOT_PATH`: Subpath for deployment (default: empty for root path, e.g., `/tinpot`)
+
+### Deployment
+
+- **Production**: See [DEPLOYMENT.md](DEPLOYMENT.md) for systemd-based deployment
+- **Subpath**: See [SUBPATH_QUICKSTART.md](SUBPATH_QUICKSTART.md) for deploying under a URL subpath
+- **Multi-Worker**: See [MULTI_WORKER_GUIDE.md](MULTI_WORKER_GUIDE.md) for scaling workers
 
 ## Project Structure
 

@@ -22,13 +22,14 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - ACTIONS_DIR=/opt/tinpot/actions
+      - ROOT_PATH=${ROOT_PATH:-}  # Set to subpath (e.g., /tinpot) or empty for root
     volumes:
       - ./actions:/opt/tinpot/actions
       - ./static:/opt/tinpot/static
     depends_on:
       redis:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --root-path "${ROOT_PATH:-}" --reload
     restart: unless-stopped
 
   worker:

@@ -26,10 +26,15 @@ from tinpot.loader import discover_actions
 # Configuration
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 ACTIONS_DIR = os.environ.get("ACTIONS_DIR", "/opt/tinpot/actions")
+ROOT_PATH = os.environ.get("ROOT_PATH", "")  # For subpath deployment
 
 
 # Initialize FastAPI app
-app = FastAPI(title="Tinpot", version="1.0")
+app = FastAPI(
+    title="Tinpot",
+    version="1.0",
+    root_path=ROOT_PATH  # Enable subpath support
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,13 +75,18 @@ async def startup_event():
 
 @app.get("/")
 async def root():
-    """Root endpoint - redirect to UI."""
-    return HTMLResponse("""
-        <html>
-            <head><meta http-equiv="refresh" content="0; url=/static/index.html"></head>
-            <body>Redirecting to Tinpot UI...</body>
-        </html>
-    """)
+    """Serve index.html with injected base path for subpath deployment."""
+    index_path = os.path.join(static_dir, "index.html")
+    with open(index_path, "r") as f:
+        html_content = f.read()
+    
+    # Inject ROOT_PATH into the HTML for client-side usage
+    html_content = html_content.replace(
+        "<!-- BASE_PATH_INJECTION -->",
+        f'<script>window.BASE_PATH = "{ROOT_PATH}";</script>'
+    )
+    
+    return HTMLResponse(content=html_content)
 
 
 @app.get("/health")

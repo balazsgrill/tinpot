@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tinpot - Automation Platform</title>
+    <!-- BASE_PATH_INJECTION -->
     <style>
         * {
             margin: 0;
@@ -278,12 +279,15 @@
     </div>
 
     <script>
+        // Get base path from injected variable (defaults to empty for root path)
+        const BASE_PATH = window.BASE_PATH || '';
+        
         let currentEventSource = null;
 
         // Load actions on page load
         async function loadActions() {
             try {
-                const response = await fetch('/api/actions');
+                const response = await fetch(`${BASE_PATH}/api/actions`);
                 const actions = await response.json();
                 
                 renderActions(actions);
@@ -375,7 +379,7 @@
 
             try {
                 // Execute action
-                const response = await fetch(`/api/actions/${actionName}/execute`, {
+                const response = await fetch(`${BASE_PATH}/api/actions/${actionName}/execute`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({parameters})
@@ -420,7 +424,7 @@
             const statusBadge = document.getElementById('statusBadge');
             logContainer.innerHTML = '';
 
-            currentEventSource = new EventSource(`/api/executions/${executionId}/stream`);
+            currentEventSource = new EventSource(`${BASE_PATH}/api/executions/${executionId}/stream`);
 
             currentEventSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);
