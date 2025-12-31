@@ -38,6 +38,9 @@ celery_app.conf.update(
     worker_send_task_events=True,
 )
 
+# Process-local flag to track if logging has been set up
+_logging_setup = False
+
 
 class ActionTask(Task):
     """
@@ -46,6 +49,13 @@ class ActionTask(Task):
     
     def __call__(self, *args, **kwargs):
         """Execute the task with proper logging context."""
+        global _logging_setup
+        
+        # Ensure logging is set up in this worker process
+        if not _logging_setup:
+            setup_logging(REDIS_URL)
+            _logging_setup = True
+        
         execution_id = self.request.id
         call_depth = kwargs.pop('_call_depth', 0)
         
@@ -100,6 +110,8 @@ def init_worker(**kwargs):
 
 def init_worker_process(**kwargs):
     """Called when each worker process starts (after fork)."""
+    global _logging_setup
+    
     # Get action group filter from environment
     action_groups_env = os.environ.get('ACTION_GROUPS', '')
     action_groups = [g.strip() for g in action_groups_env.split(',') if g.strip()]
@@ -124,6 +136,7 @@ def init_worker_process(**kwargs):
     
     # Setup logging in each worker process
     setup_logging(REDIS_URL)
+    _logging_setup = True
 
 
 # Connect signals
