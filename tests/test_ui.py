@@ -264,6 +264,73 @@ class TestTinpotUI:
         
         print(f"✓ Logs streaming: {initial_log_count} → {updated_log_count} lines")
     
+    def test_action_output_content(self, driver):
+        """Test that actual action_print() output is displayed in the UI."""
+        driver.get(UI_BASE_URL)
+        
+        # Wait for action cards
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "action-card"))
+        )
+        
+        # Find the clean_cache action
+        action_cards = driver.find_elements(By.CLASS_NAME, "action-card")
+        clean_cache_card = None
+        
+        for card in action_cards:
+            card_title = card.find_element(By.TAG_NAME, "h3").text
+            if "clean_cache" in card_title.lower():
+                clean_cache_card = card
+                break
+        
+        assert clean_cache_card is not None, "clean_cache action not found"
+        
+        # Set days parameter to 5
+        param_inputs = clean_cache_card.find_elements(By.CLASS_NAME, "param-input")
+        for input_field in param_inputs:
+            if input_field.get_attribute("data-param") == "days":
+                input_field.clear()
+                input_field.send_keys("5")
+        
+        # Start execution
+        run_button = clean_cache_card.find_element(By.CLASS_NAME, "btn-primary")
+        run_button.click()
+        
+        # Wait for modal
+        modal = WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "executionModal"))
+        )
+        
+        # Wait for execution to complete
+        WebDriverWait(driver, 30).until(
+            lambda d: "success" in modal.find_element(By.ID, "statusBadge").get_attribute("class").lower() or
+                     "error" in modal.find_element(By.ID, "statusBadge").get_attribute("class").lower()
+        )
+        
+        # Get all log text
+        log_container = modal.find_element(By.ID, "logContainer")
+        log_text = log_container.text
+        
+        print(f"Log output:\n{log_text}")
+        
+        # Verify specific messages from action_print() appear in the output
+        assert "Starting cache cleanup (files older than 5 days)" in log_text, \
+            "Starting message with parameter not found in logs"
+        
+        assert "Deleted /tmp/cache_file_1.tmp" in log_text, \
+            "First file deletion message not found"
+        
+        assert "Deleted /tmp/cache_file_2.tmp" in log_text, \
+            "Second file deletion message not found"
+        
+        assert "Deleted /tmp/cache_file_3.tmp" in log_text, \
+            "Third file deletion message not found"
+        
+        assert "✓ Cache cleanup complete! Removed 3 files." in log_text, \
+            "Completion message not found in logs"
+        
+        print("✓ All expected action_print() messages verified in UI")
+
     def test_modal_close(self, driver):
         """Test that the execution modal can be closed."""
         driver.get(UI_BASE_URL)

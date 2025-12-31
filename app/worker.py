@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from tinpot.decorators import ACTION_REGISTRY, get_action
 from tinpot.loader import discover_actions
-from tinpot.logging import setup_logging, set_execution_context
+from tinpot.logging import setup_logging, set_execution_context, action_print
 
 
 # Redis configuration
@@ -79,14 +79,14 @@ def execute_action(self, action_name: str, params: Dict[str, Any]):
     if not action_func:
         raise ValueError(f"Action not found: {action_name}")
     
-    print(f"→ Starting action: {action_name}")
+    action_print(f"→ Starting action: {action_name}")
     
     try:
         result = action_func(**params)
-        print(f"✓ Completed action: {action_name}")
+        action_print(f"✓ Completed action: {action_name}")
         return {"status": "success", "result": result}
     except Exception as e:
-        print(f"✗ Failed action: {action_name} - {str(e)}")
+        action_print(f"✗ Failed action: {action_name} - {str(e)}")
         raise
 
 

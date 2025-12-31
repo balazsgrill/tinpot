@@ -3,8 +3,11 @@ Redis-based logging handler for streaming logs from workers to API.
 """
 import logging
 import sys
+import os
 import redis
-from typing import Optional
+import subprocess
+from typing import Optional, Union, List
+from contextlib import contextmanager
 import json
 from datetime import datetime
 import threading
@@ -56,7 +59,11 @@ class RedisLogHandler(logging.Handler):
             
             # Publish to Redis channel specific to this execution
             channel = f"tinpot:logs:{execution_id}"
+            log_key = f"tinpot:logs:{execution_id}:history"
             self.redis_client.publish(channel, json.dumps(log_entry))
+            # Also store in a list for late subscribers (with TTL)
+            self.redis_client.rpush(log_key, json.dumps(log_entry))
+            self.redis_client.expire(log_key, 3600)  # Keep for 1 hour
             
         except Exception as e:
             # Don't let logging errors break the application
@@ -92,8 +99,13 @@ class StdoutRedirector:
                 "call_depth": call_depth,
             }
             channel = f"tinpot:logs:{execution_id}"
+            log_key = f"tinpot:logs:{execution_id}:history"
             try:
+                # Publish to channel (for live subscribers)
                 self.redis_client.publish(channel, json.dumps(log_entry))
+                # Also store in a list for late subscribers (with TTL)
+                self.redis_client.rpush(log_key, json.dumps(log_entry))
+                self.redis_client.expire(log_key, 3600)  # Keep for 1 hour
             except Exception as e:
                 print(f"Error publishing stdout to Redis: {e}", file=sys.stderr)
     
@@ -121,3 +133,130 @@ def setup_logging(redis_url: str = "redis://localhost:6379"):
     # Redirect stdout and stderr
     sys.stdout = StdoutRedirector(redis_url, sys.stdout)
     sys.stderr = StdoutRedirector(redis_url, sys.stderr)
+
+
+def action_print(*args, **kwargs):
+    """
+    Print function for use in actions - ensures output is captured and streamed.
+    Use this instead of regular print() in action functions.
+    
+    Example:
+        from tinpot import action_print
+        
+        @action(group="DevOps")
+        def deploy_app():
+            action_print("Starting deployment...")
+            action_print(f"Status: {status}")
+    """
+    # Use regular print which is already redirected to Redis by setup_logging()
+    print(*args, **kwargs)
+    # Force flush to ensure immediate delivery
+    sys.stdout.flush()
+
+
+def run_command(
+    cmd: Union[str, List[str]],
+    shell: bool = True,
+    check: bool = True,
+    capture_output: bool = True,
+    **kwargs
+) -> subprocess.CompletedProcess:
+    """
+    Run a shell command and capture its output to the action log stream.
+    
+    Args:
+        cmd: Command to run (string or list of arguments)
+        shell: Whether to run through shell (default: True)
+        check: Raise exception on non-zero exit code (default: True)
+        capture_output: Capture stdout/stderr (default: True)
+        **kwargs: Additional arguments passed to subprocess.run()
+    
+    Returns:
+        CompletedProcess instance with stdout/stderr as strings
+        
+    Example:
+        from tinpot import action_print, run_command
+        
+        @action(group="DevOps")
+        def git_status():
+            action_print("Checking git status...")
+            result = run_command("git status")
+            action_print(f"Exit code: {result.returncode}")
+    """
+    execution_id, call_depth = get_execution_context()
+    
+    # Log the command being executed
+    cmd_str = cmd if isinstance(cmd, str) else ' '.join(cmd)
+    action_print(f"$ {cmd_str}")
+    
+    try:
+        # Run the command
+        result = subprocess.run(
+            cmd,
+            shell=shell,
+            check=check,
+            capture_output=capture_output,
+            text=True,
+            **kwargs
+        )
+        
+        # Log stdout if present
+        if result.stdout:
+            for line in result.stdout.rstrip().split('\n'):
+                if line:
+                    action_print(f"  {line}")
+        
+        # Log stderr if present (even on success, some commands use stderr for info)
+        if result.stderr:
+            for line in result.stderr.rstrip().split('\n'):
+                if line:
+                    action_print(f"  [stderr] {line}")
+        
+        return result
+        
+    except subprocess.CalledProcessError as e:
+        # Log error output
+        action_print(f"✗ Command failed with exit code {e.returncode}")
+        if e.stdout:
+            action_print("Output:")
+            for line in e.stdout.rstrip().split('\n'):
+                if line:
+                    action_print(f"  {line}")
+        if e.stderr:
+            action_print("Error output:")
+            for line in e.stderr.rstrip().split('\n'):
+                if line:
+                    action_print(f"  {line}")
+        raise
+
+
+@contextmanager
+def capture_subprocess_output():
+    """
+    Context manager to ensure subprocess output is properly captured.
+    Use when running commands with subprocess.Popen or similar.
+    
+    Example:
+        from tinpot import action_print, capture_subprocess_output
+        
+        @action(group="DevOps")
+        def long_running_task():
+            action_print("Starting long task...")
+            with capture_subprocess_output():
+                proc = subprocess.Popen(
+                    ["./long_script.sh"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True
+                )
+                for line in proc.stdout:
+                    action_print(line.rstrip())
+                proc.wait()
+    """
+    # Nothing special needed - our redirected stdout will handle it
+    # This is just a convenience for clarity
+    try:
+        yield
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()

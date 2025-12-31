@@ -206,16 +206,24 @@ async def stream_logs(execution_id: str, request: Request):
         pubsub = redis_client.pubsub()
         
         channel = f"tinpot:logs:{execution_id}"
+        log_key = f"tinpot:logs:{execution_id}:history"
+        
         await pubsub.subscribe(channel)
         
         try:
             # Send initial connection message
             yield f"data: {json.dumps({'type': 'connected', 'execution_id': execution_id})}\n\n"
             
+            # First, send any historical logs (for late subscribers)
+            historical_logs = await redis_client.lrange(log_key, 0, -1)
+            for log_data in historical_logs:
+                log_entry = json.loads(log_data)
+                yield f"data: {json.dumps({'type': 'log', 'data': log_entry})}\n\n"
+            
             # Check task status
             result = AsyncResult(execution_id, app=celery_app)
             
-            # Stream logs from Redis
+            # Stream live logs from Redis pub/sub
             async for message in pubsub.listen():
                 if await request.is_disconnected():
                     break
