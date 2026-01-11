@@ -1,0 +1,133 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ "master" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  test:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Install Python Dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-dev
+
+      - name: Run Integration Tests
+        run: |
+          cd integration
+          go test -v .
+
+  build:
+    name: Build Binaries
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            goarch: amd64
+            cc: gcc
+            pkg_arch: amd64
+            cross_pkg: ""
+          - arch: arm64
+            goarch: arm64
+            cc: aarch64-linux-gnu-gcc
+            pkg_arch: arm64
+            cross_pkg: "gcc-aarch64-linux-gnu"
+          - arch: armv7
+            goarch: arm
+            cc: arm-linux-gnueabihf-gcc
+            pkg_arch: armhf
+            cross_pkg: "gcc-arm-linux-gnueabihf"
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Install Cross-Compilation Deps
+        if: matrix.arch != 'amd64'
+        run: |
+          sudo dpkg --add-architecture ${{ matrix.pkg_arch }}
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.cross_pkg }} libpython3-dev:${{ matrix.pkg_arch }}
+
+      - name: Install Local Deps (amd64)
+        if: matrix.arch == 'amd64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-dev
+
+      - name: Build Coordinator
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build -o dist/coordinator-linux-${{ matrix.arch }} ./coordinator
+
+      - name: Build Worker
+        env:
+          CGO_ENABLED: 1
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CC: ${{ matrix.cc }}
+        run: |
+          go build -o dist/worker-linux-${{ matrix.arch }} ./worker
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries-${{ matrix.arch }}
+          path: dist/*
+
+  release:
+    name: Release
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Flatten Artifacts
+        run: |
+          mkdir release_assets
+          find artifacts -type f -name "*" -exec cp {} release_assets/ \;
+          ls -l release_assets/
+
+      - name: Release (Rolling)
+        if: github.ref == 'refs/heads/master'
+        uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Development Build"
+          files: release_assets/*
+
+      - name: Release (Tagged)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release_assets/*
