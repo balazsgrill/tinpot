@@ -36,6 +36,7 @@ jobs:
     strategy:
       matrix:
         python_version: ['3.11', '3.12']
+        arch: ['amd64', 'arm64', 'armv7']
         include:
           - arch: amd64
             goarch: amd64
