@@ -47,20 +47,18 @@ var (
 	currentLogTopic string
 )
 
-func init() {
-	// Initialize Python Interpreter
-	// nhatthm/go-python init via cpy3 usually?
-	// doc said python.Initialize exists? No, doc summary missed it or I missed it.
-	// doc said "package python provides a high-level interface".
-	// I will use cpy3.Py_Initialize() just in case if python.Initialize() is missing.
-	// But previous error complained python.PyList_Append missing, not python package missing.
-	// Let's rely on cpy3.Py_Initialize().
-	cpy3.Py_Initialize()
-}
+// init removed, moved to main
 
 func main() {
+	// Initialize Python
+	cpy3.Py_Initialize()
+
 	setupPython()
 	discoverActions()
+
+	// Release GIL to allow other threads to run
+	mainThreadState := cpy3.PyEval_SaveThread()
+	defer cpy3.PyEval_RestoreThread(mainThreadState)
 
 	opts := mqtt.NewClientOptions().AddBroker(MQTTBroker)
 	clientID := "tinpot-worker-" + uuid.New().String()
@@ -258,6 +256,10 @@ func executeAction(c mqtt.Client, actionName string, msg mqtt.Message) {
 		return
 	}
 
+	// Acquire GIL
+	gstate := cpy3.PyGILState_Ensure()
+	defer cpy3.PyGILState_Release(gstate)
+
 	// Prepare Arguments
 	kwargs := cpy3.PyDict_New()
 	defer kwargs.DecRef()
@@ -351,7 +353,10 @@ import os
 sys.stdout = os.fdopen(%d, "w", buffering=1)
 sys.stderr = sys.stdout
 `, fd)
+	// Run with GIL
+	gstate := cpy3.PyGILState_Ensure()
 	cpy3.PyRun_SimpleString(script)
+	cpy3.PyGILState_Release(gstate)
 
 	go func() {
 		buf := make([]byte, 1024)
