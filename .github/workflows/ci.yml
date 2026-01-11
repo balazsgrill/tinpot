@@ -12,10 +12,10 @@ jobs:
     name: Run Integration Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.24'
 
@@ -54,10 +54,10 @@ jobs:
             cross_pkg: "gcc-arm-linux-gnueabihf"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.24'
 
@@ -111,7 +111,7 @@ jobs:
           go build -o dist/worker-linux-${{ matrix.arch }}-py${{ matrix.python_version }} ./worker
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.arch }}-py${{ matrix.python_version }}
           path: dist/*
@@ -126,7 +126,7 @@ jobs:
       
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
