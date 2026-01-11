@@ -57,6 +57,14 @@ class ExecutionResponse(BaseModel):
     stream_url: str
 
 
+class SyncExecutionResponse(BaseModel):
+    execution_id: str
+    action_name: str
+    status: str
+    result: Any
+
+
+
 # Import Celery app from worker (for task submission)
 from worker import celery_app
 
@@ -164,6 +172,55 @@ async def execute_action(action_name: str, request: ExecuteActionRequest):
         status="submitted",
         stream_url=f"/api/executions/{task.id}/stream"
     )
+
+
+@app.post("/api/actions/{action_name}/sync_execute", response_model=SyncExecutionResponse)
+def sync_execute(action_name: str, request: ExecuteActionRequest):
+    """
+    Trigger an action to run synchronously and wait for the result.
+    
+    This endpoint blocks until the action completes.
+    """
+    if action_name not in ACTION_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Action not found: {action_name}")
+    
+    # Get action metadata including queue
+    action_info = ACTION_REGISTRY[action_name]
+    queue_name = action_info.get('queue', 'default')
+    
+    # Submit task to Celery with queue routing
+    task = celery_app.send_task(
+        'tinpot.execute_action',
+        args=[action_name, request.parameters],
+        queue=queue_name,
+    )
+    
+    # Wait for completion (blocking)
+    # Since this is a standard 'def' (not async), FastAPI runs it in a threadpool
+    try:
+        result = task.get(disable_sync_subtasks=False)
+        
+        status = "success"
+        if task.state == 'FAILURE':
+            status = "failure"
+            
+        return SyncExecutionResponse(
+            execution_id=task.id,
+            action_name=action_name,
+            status=task.state,
+            result=result
+        )
+    except Exception as e:
+        # Check if it was a task failure
+        if task.state == 'FAILURE':
+             return SyncExecutionResponse(
+                execution_id=task.id,
+                action_name=action_name,
+                status="FAILURE",
+                result=str(e)
+            )
+        raise HTTPException(status_code=500, detail=f"Execution failed: {str(e)}")
+
 
 
 @app.get("/api/executions/{execution_id}/status")

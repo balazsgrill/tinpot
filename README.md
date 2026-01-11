@@ -109,6 +109,7 @@ def deploy(environment: str = "staging"):
 
 - `GET /api/actions` - List all available actions
 - `POST /api/actions/{name}/execute` - Trigger an action
+- `POST /api/actions/{name}/sync_execute` - Trigger an action synchronously and wait for result
 - `GET /api/executions/{id}/stream` - Stream logs via SSE
 - `GET /api/executions/{id}/status` - Get execution status
 - `POST /api/executions/{id}/cancel` - Cancel execution
