@@ -90,6 +90,14 @@ jobs:
           deb [arch=${{ matrix.pkg_arch }}] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs)-backports main restricted universe multiverse
           EOF
 
+          # Add deadsnakes PPA for older Python versions (3.11 on Noble)
+          sudo add-apt-repository ppa:deadsnakes/ppa
+          
+          # Patch deadsnakes to allow foreign architecture if it was added as DEB822
+          # add-apt-repository usually doesn't restricted arch, so it tries all managed archs.
+          # Since we added dpkg architecture, it SHOULD try to fetch armhf/arm64 from PPA too.
+          # But we need to ensure it doesn't fail on "default" repo lookups (which we patched above).
+          
           sudo apt-get update
           # Install specific python dev version for target arch
           sudo apt-get install -y ${{ matrix.cross_pkg }} libpython${{ matrix.python_version }}-dev:${{ matrix.pkg_arch }}
