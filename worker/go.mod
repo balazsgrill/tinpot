@@ -5,8 +5,8 @@ go 1.25.5
 require (
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/google/uuid v1.6.0
-	go.nhat.io/cpy/v3 v3.11.2 // version is intentional to match python version compatibility
-	go.nhat.io/python/v3 v3.11.3 // version is intentional to match python version compatibility
+	go.nhat.io/cpy/v3 v3.12.0 // version is intentional to match python version compatibility
+	go.nhat.io/python/v3 v3.12.0 // version is intentional to match python version compatibility
 )
 
 require (

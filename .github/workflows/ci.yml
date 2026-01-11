@@ -35,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        python_version: ['3.11', '3.12']
         include:
           - arch: amd64
             goarch: amd64
@@ -65,15 +66,30 @@ jobs:
         run: |
           sudo dpkg --add-architecture ${{ matrix.pkg_arch }}
           sudo apt-get update
-          sudo apt-get install -y ${{ matrix.cross_pkg }} libpython3-dev:${{ matrix.pkg_arch }}
+          # Install specific python dev version for target arch
+          sudo apt-get install -y ${{ matrix.cross_pkg }} libpython${{ matrix.python_version }}-dev:${{ matrix.pkg_arch }}
 
       - name: Install Local Deps (amd64)
         if: matrix.arch == 'amd64'
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-dev
+          # To get specific python versions on ubuntu, we might need deadsnakes ppa or ensure they are available
+          # Ubuntu 22.04 has 3.10 default. 24.04 has 3.12.
+          # We use generic actions, but for specific header versions we need ensure we get them.
+          sudo add-apt-repository ppa:deadsnakes/ppa
+          sudo apt-get update
+          sudo apt-get install -y libpython${{ matrix.python_version }}-dev
+
+      - name: Configure Worker Python Version
+        run: |
+          cd worker
+          ./configure_python.sh ${{ matrix.python_version }}
 
       - name: Build Coordinator
+        # Build coordinator only once per arch? Or just build it every time?
+        # Coordinator doesn't depend on Python, so version doesn't matter.
+        # But matrix runs for every combo. Overwriting is fine, or we can conditionalize.
+        # Let's just build it. Cost is low.
         env:
           CGO_ENABLED: 0
           GOOS: linux
@@ -87,13 +103,17 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CC: ${{ matrix.cc }}
+          # We need to ensure CGO picks up the RIGHT python headers.
+          # pkg-config usually handles this if "python-3.11" is requested.
+          # go-python usually uses pkg-config.
+          # We might need to set PKG_CONFIG_PATH or verify pkg-config name.
         run: |
-          go build -o dist/worker-linux-${{ matrix.arch }} ./worker
+          go build -o dist/worker-linux-${{ matrix.arch }}-py${{ matrix.python_version }} ./worker
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: binaries-${{ matrix.arch }}
+          name: binaries-${{ matrix.arch }}-py${{ matrix.python_version }}
           path: dist/*
 
   release:
