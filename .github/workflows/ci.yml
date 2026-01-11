@@ -128,7 +128,9 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -o dist/coordinator-linux-${{ matrix.arch }} ./coordinator
+          mkdir -p dist
+          cd coordinator
+          go build -o ../dist/coordinator-linux-${{ matrix.arch }} .
 
       - name: Build Worker
         env:
@@ -141,7 +143,9 @@ jobs:
           # go-python usually uses pkg-config.
           # We might need to set PKG_CONFIG_PATH or verify pkg-config name.
         run: |
-          go build -o dist/worker-linux-${{ matrix.arch }}-py${{ matrix.python_version }} ./worker
+          mkdir -p dist
+          cd worker
+          go build -o ../dist/worker-linux-${{ matrix.arch }}-py${{ matrix.python_version }} .
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
