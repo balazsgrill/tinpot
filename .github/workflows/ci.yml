@@ -41,16 +41,19 @@ jobs:
             goarch: amd64
             cc: gcc
             pkg_arch: amd64
+            triplet: x86_64-linux-gnu
             cross_pkg: ""
           - arch: arm64
             goarch: arm64
             cc: aarch64-linux-gnu-gcc
             pkg_arch: arm64
+            triplet: aarch64-linux-gnu
             cross_pkg: "gcc-aarch64-linux-gnu"
           - arch: armv7
             goarch: arm
             cc: arm-linux-gnueabihf-gcc
             pkg_arch: armhf
+            triplet: arm-linux-gnueabihf
             cross_pkg: "gcc-arm-linux-gnueabihf"
 
     steps:
@@ -138,10 +141,7 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CC: ${{ matrix.cc }}
-          # We need to ensure CGO picks up the RIGHT python headers.
-          # pkg-config usually handles this if "python-3.11" is requested.
-          # go-python usually uses pkg-config.
-          # We might need to set PKG_CONFIG_PATH or verify pkg-config name.
+          PKG_CONFIG_PATH: /usr/lib/${{ matrix.triplet }}/pkgconfig
         run: |
           mkdir -p dist
           cd worker
