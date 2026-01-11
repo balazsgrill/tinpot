@@ -65,6 +65,21 @@ jobs:
         if: matrix.arch != 'amd64'
         run: |
           sudo dpkg --add-architecture ${{ matrix.pkg_arch }}
+          
+          # Update sources.list to restrict default repos to amd64
+          sudo sed -i 's/^deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
+          sudo sed -i 's/^deb-src http/deb-src [arch=amd64] http/g' /etc/apt/sources.list
+
+          # Add ports repository for foreign architecture
+          # Assuming ubuntu runner version (mostly jammy or noble) has "ports" available
+          # We construct the sources line dynamically or just add standard ports
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/ports.list
+          deb [arch=${{ matrix.pkg_arch }}] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs) main restricted universe multiverse
+          deb [arch=${{ matrix.pkg_arch }}] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs)-updates main restricted universe multiverse
+          deb [arch=${{ matrix.pkg_arch }}] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs)-security main restricted universe multiverse
+          deb [arch=${{ matrix.pkg_arch }}] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs)-backports main restricted universe multiverse
+          EOF
+
           sudo apt-get update
           # Install specific python dev version for target arch
           sudo apt-get install -y ${{ matrix.cross_pkg }} libpython${{ matrix.python_version }}-dev:${{ matrix.pkg_arch }}
