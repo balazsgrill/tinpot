@@ -1,155 +1,125 @@
 # Tinpot
 
-🥫 **Tinpot** - A lightweight Python automation platform that replaces shell-script wrappers like OliveTin.
+🥫 **Tinpot** - A lightweight execution platform for Python automation, built on a robust Go/MQTT architecture. It replaces complex stacks like Python/Celery with a efficient, modular system.
 
 ## Features
 
-- **Python-Native Actions**: Define automations as simple Python functions with the `@action` decorator
-- **Real-Time Feedback**: Stream logs from workers to the UI via Server-Sent Events (SSE)
-- **Distributed Architecture**: Separate control plane (API) and execution plane (Celery workers)
-- **Nested Procedures**: Actions can call other actions, with proper call-stack tracking
-- **Simple UI**: Clean web interface with action cards and live log streaming
-- **Task Cancellation**: Stop running actions with SIGTERM
+- **Decoupled Architecture**: Go-native Coordinator and Worker communicating via MQTT.
+- **Python-Native Actions**: Define automations as simple Python functions with the `@action` decorator.
+- **Embedded Execution**: Go Worker embeds Python (via C-API) for low-latency execution and direct stdout/stderr capture.
+- **Real-Time Feedback**: Stream logs from workers to the UI via Server-Sent Events (SSE).
+- **Synchronous & Asynchronous**: Trigger actions and wait for results, or fire-and-forget.
+- **Simple UI**: Clean web interface for triggering actions and viewing logs.
+
+## Architecture
+
+```
+┌─────────────┐       ┌───────────────┐       ┌─────────────┐
+│   Browser   │──────▶│  Coordinator  │◀─────▶│    MQTT     │
+│             │◀──SSE─│  (Go API)     │       │   Broker    │
+└─────────────┘       └───────────────┘       └─────────────┘
+                                                      ▲
+                                                      │
+                                                      ▼
+                                              ┌─────────────┐
+                                              │   Worker    │
+                                              │ (Go+Python) │
+                                              └─────────────┘
+```
 
 ## Quick Start
 
-### Using Docker Compose (Recommended)
+### Prerequisites
+
+- Go 1.25+ (for building)
+- Python 3.11+ (for worker runtime)
+- MQTT Broker (e.g., Mosquitto)
+
+### Building
 
 ```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
+mkdir -p bin
+go build -o bin/coordinator ./coordinator
+go build -o bin/worker ./worker
 ```
 
-Access the UI at http://localhost:8000
+### Running Locally
 
-### Running Tests
+1. **Start MQTT Broker**
+   ```bash
+   # Ensure mosquitto is running on localhost:1883
+   docker run -p 1883:1883 eclipse-mosquitto
+   ```
 
-```bash
-# Run the complete test suite (API + UI tests)
-./run_tests.sh
+2. **Start Coordinator**
+   ```bash
+   export MQTT_BROKER=tcp://localhost:1883
+   ./bin/coordinator
+   ```
+   The API will be available at `http://localhost:8000`.
 
-# Or manually
-docker-compose --profile test run --rm test-runner
-
-# Run specific test suites
-docker-compose --profile test run --rm test-runner pytest tests/test_api.py -v
-docker-compose --profile test run --rm test-runner pytest tests/test_ui.py -v
-```
-
-See [TESTING.md](TESTING.md) for detailed testing documentation.
-
-### Local Development
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Terminal 1: Start Redis
-docker run -p 6379:6379 redis:7-alpine
-
-# Terminal 2: Start Worker
-cd app
-celery -A worker worker --loglevel=info
-
-# Terminal 3: Start API
-cd app
-uvicorn main:app --reload --port 8000
-```
+3. **Start Worker**
+   ```bash
+   export MQTT_BROKER=tcp://localhost:1883
+   export ACTIONS_DIR=$(pwd)/actions
+   export LIB_DIR=$(pwd)/lib
+   ./bin/worker
+   ```
 
 ## Creating Actions
 
-Actions are Python functions decorated with `@action`:
+Actions are standard Python functions located in the `actions/` directory. They utilize the lightweight `tinpot` library.
 
 ```python
-# actions/my_actions.py
-from tinpot import action
+# actions/my_ops.py
+from tinpot import action, action_print
 import time
 
 @action(group="Maintenance", description="Clean up old files")
 def cleanup(days: int = 7):
     """Delete files older than N days."""
-    print(f"Cleaning files older than {days} days...")
+    action_print(f"Cleaning files older than {days} days...")
     # Your logic here
     time.sleep(2)
-    print("✓ Cleanup complete!")
+    action_print("✓ Cleanup complete!")
     return {"files_deleted": 42}
-
-@action(group="DevOps")
-def deploy(environment: str = "staging"):
-    """Deploy to specified environment."""
-    print(f"Deploying to {environment}...")
-    # Nested call
-    cleanup(days=30)
-    print("✓ Deploy complete!")
-```
-
-## Architecture
-
-```
-┌─────────────┐      ┌──────────────┐      ┌────────────┐
-│   Browser   │─────▶│  FastAPI     │◀────▶│   Redis    │
-│             │◀─SSE─│  (API)       │      │  (Broker)  │
-└─────────────┘      └──────────────┘      └────────────┘
-                            │                      ▲
-                            │                      │
-                            ▼                      │
-                     ┌──────────────┐             │
-                     │   Celery     │─────────────┘
-                     │   Worker     │
-                     └──────────────┘
 ```
 
 ## API Endpoints
 
-- `GET /api/actions` - List all available actions
-- `POST /api/actions/{name}/execute` - Trigger an action
-- `POST /api/actions/{name}/sync_execute` - Trigger an action synchronously and wait for result
-- `GET /api/executions/{id}/stream` - Stream logs via SSE
-- `GET /api/executions/{id}/status` - Get execution status
-- `POST /api/executions/{id}/cancel` - Cancel execution
+- `GET /api/actions`: List all discovered actions.
+- `POST /api/actions/{name}/execute`: Trigger an action asynchronously (returns execution ID).
+- `POST /api/actions/{name}/sync_execute`: Trigger an action and wait for the result.
+- `GET /api/executions/{id}/stream`: Stream logs and status via SSE.
+- `GET /api/executions/{id}/status`: Get execution status.
 
 ## Configuration
 
 Environment variables:
 
-- `REDIS_URL`: Redis connection URL (default: `redis://localhost:6379`)
-- `ACTIONS_DIR`: Path to actions directory (default: `/opt/tinpot/actions`)
-- `ROOT_PATH`: Subpath for deployment (default: empty for root path, e.g., `/tinpot`)
-
-### Deployment
-
-- **Production**: See [DEPLOYMENT.md](DEPLOYMENT.md) for systemd-based deployment
-- **Subpath**: See [SUBPATH_QUICKSTART.md](SUBPATH_QUICKSTART.md) for deploying under a URL subpath
-- **Multi-Worker**: See [MULTI_WORKER_GUIDE.md](MULTI_WORKER_GUIDE.md) for scaling workers
+| Variable | Component | Description | Default |
+|----------|-----------|-------------|---------|
+| `MQTT_BROKER` | Both | URL of the MQTT broker | `tcp://localhost:1883` |
+| `PORT` | Coordinator | HTTP API Port | `8000` |
+| `STATIC_DIR` | Coordinator | Directory for static UI files | `../static` |
+| `ACTIONS_DIR` | Worker | Path to actions directory | `../actions` |
+| `LIB_DIR` | Worker | Path to tinpot python lib | `../lib` |
 
 ## Project Structure
 
 ```
 tinpot/
-├── actions/                  # User-defined actions
-│   ├── __init__.py
-│   └── example_actions.py
-├── app/
-│   ├── main.py              # FastAPI server
-│   ├── worker.py            # Celery worker
-│   └── tinpot/              # Core library
-│       ├── __init__.py
-│       ├── decorators.py    # @action decorator
-│       ├── logging.py       # Redis log streaming
-│       └── loader.py        # Action discovery
-├── static/
-│   └── index.html           # Web UI
-├── Dockerfile
-├── docker-compose.yml
-└── requirements.txt
+├── actions/                  # User-defined Python actions
+├── bin/                      # Compiled binaries
+├── coordinator/              # Go Coordinator (API & MQTT Client)
+├── worker/                   # Go Worker (Embedded Python)
+├── lib/                      # Python support libraries
+│   └── tinpot/               # tinpot python package
+├── integration/              # Integration tests (Go + Mochi MQTT)
+├── static/                   # Web UI assets
+└── README.md
 ```
 
 ## License
 
-MIT
+GPL3
