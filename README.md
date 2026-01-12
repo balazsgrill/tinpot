@@ -84,6 +84,25 @@ def cleanup(days: int = 7):
     return {"files_deleted": 42}
 ```
 
+## Python Dependencies & Virtual Environments
+
+Tinpot embeds the Python runtime but does not automatically activate virtual environments. To use external libraries (e.g., `requests`, `pandas`) installed in a `venv`, you must add the venv's `site-packages` to the `PYTHONPATH` before running the worker.
+
+**Example:**
+
+```bash
+# 1. Create and populate venv
+python3 -m venv venv
+source venv/bin/activate
+pip install requests pandas
+
+# 2. Run worker with PYTHONPATH
+export PYTHONPATH=$(pwd)/venv/lib/python3.11/site-packages:$PYTHONPATH
+./bin/worker
+```
+
+> **Note**: Ensure the Python version of the venv matches the version the worker was linked against (usually system Python 3.11/3.12).
+
 ## API Endpoints
 
 - `GET /api/actions`: List all discovered actions.

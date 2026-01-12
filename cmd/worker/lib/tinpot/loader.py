@@ -24,5 +24,5 @@ def discover_actions(directory: str):
                 
                 try:
                     importlib.import_module(module_name)
-                except ImportError as e:
-                    print(f"Failed to import {module_name}: {e}")
+                except Exception as e:
+                    print(f"WARNING: Failed to load action module '{module_name}': {e}", file=sys.stderr)
