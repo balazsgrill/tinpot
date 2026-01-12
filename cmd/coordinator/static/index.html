@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -33,7 +34,7 @@
         header h1 {
             font-size: 3em;
             margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         header p {
@@ -52,13 +53,13 @@
             background: white;
             border-radius: 12px;
             padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             transition: transform 0.2s, box-shadow 0.2s;
         }
 
         .action-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
         }
 
         .action-card h3 {
@@ -134,7 +135,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             z-index: 1000;
             align-items: center;
             justify-content: center;
@@ -240,10 +241,13 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -281,7 +285,7 @@
     <script>
         // Get base path from injected variable (defaults to empty for root path)
         const BASE_PATH = window.BASE_PATH || '';
-        
+
         let currentEventSource = null;
 
         // Load actions on page load
@@ -289,11 +293,11 @@
             try {
                 const response = await fetch(`${BASE_PATH}/api/actions`);
                 const actions = await response.json();
-                
+
                 renderActions(actions);
             } catch (error) {
                 console.error('Failed to load actions:', error);
-                document.getElementById('actionsGrid').innerHTML = 
+                document.getElementById('actionsGrid').innerHTML =
                     '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: white;">Error loading actions</div>';
             }
         }
@@ -307,7 +311,7 @@
             for (const [name, action] of Object.entries(actions)) {
                 const group = action.group || 'General';
                 if (!grouped[group]) grouped[group] = [];
-                grouped[group].push({name, ...action});
+                grouped[group].push({ name, ...action });
             }
 
             // Render each group
@@ -325,8 +329,8 @@
 
             const params = action.parameters || {};
             const paramInputs = Object.entries(params).map(([name, param]) => {
-                const inputType = param.type === 'int' ? 'number' : 
-                                 param.type === 'bool' ? 'checkbox' : 'text';
+                const inputType = param.type === 'int' ? 'number' :
+                    param.type === 'bool' ? 'checkbox' : 'text';
                 const defaultValue = param.default !== null ? param.default : '';
 
                 return `
@@ -381,12 +385,12 @@
                 // Execute action
                 const response = await fetch(`${BASE_PATH}/api/actions/${actionName}/execute`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({parameters})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ parameters })
                 });
 
                 const result = await response.json();
-                
+
                 // Open modal and start streaming
                 openExecutionModal(actionName, result.execution_id);
 
@@ -435,14 +439,15 @@
                     const logData = data.data;
                     addLogLine(logData.message, logData.call_depth || 0);
                 } else if (data.type === 'complete') {
-                    if (data.successful) {
+                    const result = data.data;
+                    if (result.successful) {
                         statusBadge.className = 'status-badge status-success';
                         statusBadge.textContent = '✓ Completed Successfully';
                         addLogLine('\n--- Execution Complete ---', 0);
                     } else {
                         statusBadge.className = 'status-badge status-error';
                         statusBadge.textContent = '✗ Failed';
-                        addLogLine(`\n--- Execution Failed: ${data.error} ---`, 0);
+                        addLogLine(`\n--- Execution Failed: ${result.error} ---`, 0);
                     }
                     currentEventSource.close();
                 }
@@ -469,7 +474,7 @@
         function closeModal() {
             const modal = document.getElementById('executionModal');
             modal.classList.remove('active');
-            
+
             if (currentEventSource) {
                 currentEventSource.close();
                 currentEventSource = null;
@@ -480,4 +485,5 @@
         loadActions();
     </script>
 </body>
+
 </html>
