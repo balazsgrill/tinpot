@@ -84,6 +84,7 @@ func (m *mqttActionManager) ListActions() map[string]tinpot.ActionInfo {
 		result[name] = tinpot.ActionInfo{
 			Name:        name,
 			Description: act.Description,
+			Group:       act.Group,
 			Parameters:  act.Parameters,
 		}
 	}

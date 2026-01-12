@@ -7,9 +7,10 @@ type ActionLogs func(level string, message string)
 type ActionTrigger func(parameters map[string]interface{}, response ActionResponse, logs ActionLogs)
 
 type ActionInfo struct {
-	Name        string
-	Description string
-	Parameters  []string
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Group       string   `json:"group"`
+	Parameters  []string `json:"parameters"`
 }
 
 type ActionManager interface {
