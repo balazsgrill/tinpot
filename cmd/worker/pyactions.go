@@ -233,7 +233,7 @@ func (mgr *pyActionManager) discoverActions() {
 
 		name := python.AsString(key)
 		desc := python.AsString(val.GetItem("description"))
-		//group := python.AsString(val.GetItem("group"))
+		group := python.AsString(val.GetItem("group"))
 
 		params := make(map[string]tinpot.ParameterInfo)
 		pDict := val.GetItem("parameters")
@@ -280,11 +280,10 @@ func (mgr *pyActionManager) discoverActions() {
 
 		mgr.actions[name] = &pyActionInfo{
 			ActionInfo: tinpot.ActionInfo{
-				Name: name,
-				//Group:       group,
+				Name:        name,
+				Group:       group,
 				Description: desc,
 				Parameters:  params,
-				//TriggerTopic: fmt.Sprintf("tinpot/ops/%s/run", name),
 			},
 			Function: funcObj,
 		}
