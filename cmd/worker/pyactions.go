@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"maps"
 	"os"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -19,10 +17,10 @@ import (
 )
 
 type Action struct {
-	Name        string                 `json:"name"`
-	Group       string                 `json:"group"`
-	Description string                 `json:"description"`
-	Parameters  map[string]interface{} `json:"parameters"`
+	Name        string                          `json:"name"`
+	Group       string                          `json:"group"`
+	Description string                          `json:"description"`
+	Parameters  map[string]tinpot.ParameterInfo `json:"parameters"`
 	//TriggerTopic string                 `json:"trigger_topic"`
 	Function *python.Object `json:"-"`
 }
@@ -237,7 +235,7 @@ func (mgr *pyActionManager) discoverActions() {
 		desc := python.AsString(val.GetItem("description"))
 		//group := python.AsString(val.GetItem("group"))
 
-		params := make(map[string]interface{})
+		params := make(map[string]tinpot.ParameterInfo)
 		pDict := val.GetItem("parameters")
 
 		pKeysObj := pDict.GetAttr("keys").CallMethodArgs("__call__")
@@ -266,9 +264,9 @@ func (mgr *pyActionManager) discoverActions() {
 					pDefault = pDefObj.String()
 				}
 			}
-			params[pName] = map[string]interface{}{
-				"type":    pType,
-				"default": pDefault,
+			params[pName] = tinpot.ParameterInfo{
+				Type:    pType,
+				Default: pDefault,
 			}
 		}
 
@@ -285,7 +283,7 @@ func (mgr *pyActionManager) discoverActions() {
 				Name: name,
 				//Group:       group,
 				Description: desc,
-				Parameters:  slices.Collect(maps.Keys(params)),
+				Parameters:  params,
 				//TriggerTopic: fmt.Sprintf("tinpot/ops/%s/run", name),
 			},
 			Function: funcObj,

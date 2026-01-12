@@ -110,6 +110,7 @@ func announceTopicForAction(actionName string) string {
 func toMqttAction(act tinpot.ActionInfo) tinpot.MqttAction {
 	return tinpot.MqttAction{
 		Description:  act.Description,
+		Group:        act.Group,
 		Parameters:   act.Parameters,
 		TriggerTopic: triggerTopicForAction(act.Name),
 	}

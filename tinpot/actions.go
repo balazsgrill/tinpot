@@ -6,11 +6,16 @@ type ActionLogs func(level string, message string)
 // ActionTrigger triggers the execution of the action. It is expected to be asynchronous
 type ActionTrigger func(parameters map[string]interface{}, response ActionResponse, logs ActionLogs)
 
+type ParameterInfo struct {
+	Type    string      `json:"type"`
+	Default interface{} `json:"default"`
+}
+
 type ActionInfo struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Group       string   `json:"group"`
-	Parameters  []string `json:"parameters"`
+	Name        string                   `json:"name"`
+	Description string                   `json:"description"`
+	Group       string                   `json:"group"`
+	Parameters  map[string]ParameterInfo `json:"parameters"`
 }
 
 type ActionManager interface {
@@ -20,10 +25,10 @@ type ActionManager interface {
 }
 
 type MqttAction struct {
-	Description  string   `json:"description"`
-	Group        string   `json:"group"`
-	Parameters   []string `json:"parameters"`
-	TriggerTopic string   `json:"trigger_topic"`
+	Description  string                   `json:"description"`
+	Group        string                   `json:"group"`
+	Parameters   map[string]ParameterInfo `json:"parameters"`
+	TriggerTopic string                   `json:"trigger_topic"`
 }
 
 const (
