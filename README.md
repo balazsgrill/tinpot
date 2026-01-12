@@ -32,7 +32,7 @@
 ### Prerequisites
 
 - Go 1.25+ (for building)
-- Python 3.11+ (for worker runtime)
+- Python 3.11 or 3.12 (for worker runtime)
 - MQTT Broker (e.g., Mosquitto)
 
 ### Building
@@ -62,7 +62,6 @@ go build -o bin/worker ./worker
    ```bash
    export MQTT_BROKER=tcp://localhost:1883
    export ACTIONS_DIR=$(pwd)/actions
-   export LIB_DIR=$(pwd)/lib
    ./bin/worker
    ```
 
@@ -101,9 +100,7 @@ Environment variables:
 |----------|-----------|-------------|---------|
 | `MQTT_BROKER` | Both | URL of the MQTT broker | `tcp://localhost:1883` |
 | `PORT` | Coordinator | HTTP API Port | `8000` |
-| `STATIC_DIR` | Coordinator | Directory for static UI files | `../static` |
 | `ACTIONS_DIR` | Worker | Path to actions directory | `../actions` |
-| `LIB_DIR` | Worker | Path to tinpot python lib | `../lib` |
 
 ## Project Structure
 
@@ -113,10 +110,7 @@ tinpot/
 ├── bin/                      # Compiled binaries
 ├── coordinator/              # Go Coordinator (API & MQTT Client)
 ├── worker/                   # Go Worker (Embedded Python)
-├── lib/                      # Python support libraries
-│   └── tinpot/               # tinpot python package
 ├── integration/              # Integration tests (Go + Mochi MQTT)
-├── static/                   # Web UI assets
 └── README.md
 ```
 

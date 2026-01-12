@@ -7,7 +7,10 @@ require (
 	github.com/google/uuid v1.6.0
 	go.nhat.io/cpy/v3 v3.12.0 // version is intentional to match python version compatibility
 	go.nhat.io/python/v3 v3.12.0 // version is intentional to match python version compatibility
+	github.com/balazsgrill/tinpot v0.0.0-20260112114307-6f6f6f6f6f6f
 )
+
+replace github.com/balazsgrill/tinpot => ../../tinpot
 
 require (
 	github.com/gorilla/websocket v1.5.3 // indirect

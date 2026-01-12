@@ -48,7 +48,7 @@ func TestEndToEnd(t *testing.T) {
 	mqttURL := fmt.Sprintf("tcp://localhost:%d", port)
 
 	// 2. Build Binaries
-	rootDir, _ := filepath.Abs("..")
+	rootDir, _ := filepath.Abs("../..")
 	binDir := filepath.Join(rootDir, "bin")
 	os.MkdirAll(binDir, 0755)
 
@@ -57,14 +57,14 @@ func TestEndToEnd(t *testing.T) {
 
 	// Build Coordinator
 	cmd := exec.Command("go", "build", "-o", coordBin, ".")
-	cmd.Dir = filepath.Join(rootDir, "coordinator")
+	cmd.Dir = filepath.Join(rootDir, "cmd/coordinator")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	require.NoError(t, cmd.Run(), "Failed to build coordinator")
 
 	// Build Worker
 	cmd = exec.Command("go", "build", "-o", workerBin, ".")
-	cmd.Dir = filepath.Join(rootDir, "worker")
+	cmd.Dir = filepath.Join(rootDir, "cmd/worker")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	require.NoError(t, cmd.Run(), "Failed to build worker")
@@ -77,18 +77,7 @@ func TestEndToEnd(t *testing.T) {
 	coordCmd := exec.CommandContext(ctx, coordBin)
 	coordCmd.Env = append(os.Environ(),
 		fmt.Sprintf("MQTT_BROKER=%s", mqttURL),
-		fmt.Sprintf("PORT=%d", coordPort), // Gin uses PORT? No, hardcoded :8000 in main.go
-		// We need to change port in main.go or env?
-		// main.go uses r.Run(":8000") hardcoded at the end.
-		// We should update main.go to use PORT env or just expect 8000.
-		// If 8000 is taken, test fails.
-		// Ideally we update Coordinator to read PORT.
-		// For this test, let's assume 8000 is free or we fix main.go.
-		// Let's fix main.go in next step if needed.
-		// Actually, let's try to run it. If it fails binding, we know why.
-		// But in environment, usually 8000 is free.
-		// IF we want parallel tests or robustness, we should fix it.
-		// Let's Assume 8000 for now.
+		fmt.Sprintf("PORT=%d", coordPort),
 	)
 	coordCmd.Stdout = os.Stdout
 	coordCmd.Stderr = os.Stderr
@@ -158,6 +147,88 @@ func TestEndToEnd(t *testing.T) {
 	// clean_cache returns {"files_deleted": 42} usually (based on README)
 	// Or we check example_actions.py content
 	fmt.Printf("Execution Result: %v\n", execResp)
+
+	// 7. Execute Action (Async)
+	// Use health_check for logs
+	payload = map[string]interface{}{
+		"parameters": map[string]interface{}{
+			"duration": 3,
+		},
+	}
+	payloadBytes, _ = json.Marshal(payload)
+
+	resp, err = http.Post(
+		apiURL+"/api/actions/health_check/execute",
+		"application/json",
+		bytes.NewBuffer(payloadBytes),
+	)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, _ = io.ReadAll(resp.Body)
+	assert.Equal(t, 200, resp.StatusCode, "Async execution submission failed: "+string(body))
+
+	var asyncResp struct {
+		ExecutionID string `json:"execution_id"`
+		Status      string `json:"status"`
+		StreamURL   string `json:"stream_url"`
+	}
+	json.Unmarshal(body, &asyncResp)
+	assert.NotEmpty(t, asyncResp.ExecutionID)
+	assert.Equal(t, "submitted", asyncResp.Status)
+	assert.NotEmpty(t, asyncResp.StreamURL)
+
+	// 8. Stream Logs
+	streamURL := apiURL + asyncResp.StreamURL
+
+	ctxStream, cancelStream := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelStream()
+
+	reqStream, err := http.NewRequestWithContext(ctxStream, "GET", streamURL, nil)
+	require.NoError(t, err)
+
+	streamResp, err := http.DefaultClient.Do(reqStream)
+	require.NoError(t, err)
+	defer streamResp.Body.Close()
+
+	assert.Equal(t, 200, streamResp.StatusCode)
+
+	reader := streamResp.Body
+	buf := make([]byte, 1024)
+	var streamOutput string
+
+	// Simple SSE reader
+	// In a real client we'd use line scanner, but here simple read loop until close
+	// Actually, we should probably read line by line to parse events properly?
+	// Or just accummulate and check contents?
+	// Since the connection stays open until completion, we can read until EOF.
+
+	for {
+		n, err := reader.Read(buf)
+		if n > 0 {
+			streamOutput += string(buf[:n])
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			if err == context.DeadlineExceeded {
+				t.Fatal("Stream timed out")
+			}
+			t.Logf("Stream read error: %v", err)
+			break
+		}
+	}
+	fmt.Println("Stream finished.")
+
+	// Verify Logs
+	assert.Contains(t, streamOutput, "Starting health check")
+	assert.Contains(t, streamOutput, "[1/3] Checking system health")
+
+	// Verify Completion
+	// SSE format: data: {"type": "complete", "data": ...}
+	assert.Contains(t, streamOutput, `"type":"complete"`)
+	assert.Contains(t, streamOutput, `"successful":true`)
 }
 
 func getFreePort() int {

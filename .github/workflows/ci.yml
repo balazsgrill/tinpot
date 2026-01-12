@@ -17,7 +17,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Install Python Dev
         run: |
@@ -26,7 +26,7 @@ jobs:
 
       - name: Run Integration Tests
         run: |
-          cd integration
+          cd test/integration
           go test -v .
 
   build:
@@ -63,7 +63,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Install Cross-Compilation Deps
         if: matrix.arch != 'amd64'
@@ -119,7 +119,7 @@ jobs:
 
       - name: Configure Worker Python Version
         run: |
-          cd worker
+          cd cmd/worker
           ./configure_python.sh ${{ matrix.python_version }}
 
       - name: Build Coordinator
@@ -133,8 +133,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           mkdir -p dist
-          cd coordinator
-          go build -o ../dist/coordinator-linux-${{ matrix.arch }} .
+          cd cmd/coordinator
+          go build -o ../../dist/coordinator-linux-${{ matrix.arch }} .
 
       - name: Build Worker
         env:
@@ -145,8 +145,8 @@ jobs:
           PKG_CONFIG_PATH: /usr/lib/${{ matrix.triplet }}/pkgconfig
         run: |
           mkdir -p dist
-          cd worker
-          go build -o ../dist/worker-linux-${{ matrix.arch }}-py${{ matrix.python_version }} .
+          cd cmd/worker
+          go build -o ../../dist/worker-linux-${{ matrix.arch }}-py${{ matrix.python_version }} .
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
