@@ -2,7 +2,16 @@ import subprocess
 import os
 from .decorators import action_print
 
-def run_command(command: str, cwd: str = None) -> str:
+class CommandResult:
+    def __init__(self, stdout: str, stderr: str, returncode: int):
+        self.stdout = stdout
+        self.stderr = stderr
+        self.returncode = returncode
+
+    def __repr__(self):
+        return f"CommandResult(returncode={self.returncode})"
+
+def run_command(command: str, cwd: str = None) -> CommandResult:
     """
     Run a shell command and capture output while streaming it to action logs.
     
@@ -11,7 +20,7 @@ def run_command(command: str, cwd: str = None) -> str:
         cwd: Working directory (optional)
         
     Returns:
-        Combined stdout/stderr output as string
+        CommandResult object with .stdout, .stderr, and .returncode
         
     Raises:
         Exception: If command fails (non-zero exit code)
@@ -42,4 +51,5 @@ def run_command(command: str, cwd: str = None) -> str:
     if rc != 0:
         raise Exception(f"Command failed with exit code {rc}")
         
-    return "\n".join(output)
+    stdout_str = "\n".join(output)
+    return CommandResult(stdout=stdout_str, stderr="", returncode=rc)
