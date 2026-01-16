@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Execution Log</title>
+    <!-- BASE_PATH_INJECTION -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 10px 15px;
+            background: #252526;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-running {
+            background: #ffeaa7;
+            color: #d63031;
+        }
+
+        .status-success {
+            background: #55efc4;
+            color: #00b894;
+        }
+
+        .status-error {
+            background: #ff7675;
+            color: #d63031;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 5px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .logs {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            font-size: 0.9em;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .log-line {
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .log-line:last-child {
+            border-bottom: none;
+        }
+
+        .log-meta {
+            color: #888;
+            font-size: 0.8em;
+            margin-right: 10px;
+            user-select: none;
+        }
+
+        .log-message {
+            word-break: break-all;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #424242;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4f4f4f;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <span id="title">Execution Log</span>
+        <span id="status" class="status-badge status-running">
+            <span class="loading"></span> Connecting...
+        </span>
+    </div>
+    <div id="logs" class="logs"></div>
+
+    <script>
+        // Get execution ID from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const executionId = urlParams.get('id');
+        const basePath = window.BASE_PATH || '';
+
+        const logsContainer = document.getElementById('logs');
+        const statusEl = document.getElementById('status');
+        const titleEl = document.getElementById('title');
+
+        if (!executionId) {
+            statusEl.className = 'status-badge status-error';
+            statusEl.textContent = 'No Execution ID';
+            addLog('Error: No execution ID provided in URL parameters');
+        } else {
+            initStream();
+        }
+
+        function initStream() {
+            titleEl.textContent = `Exec: ${executionId.slice(0, 8)}...`;
+
+            const eventSource = new EventSource(`${basePath}/api/executions/${executionId}/stream`);
+
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'connected') {
+                    statusEl.innerHTML = '<span class="loading"></span> Running';
+                    addLog('--- Setup: Connected to stream ---');
+                } else if (data.type === 'log') {
+                    const logData = data.data;
+                    // Format timestamp if available
+                    const time = logData.timestamp ? new Date(logData.timestamp).toLocaleTimeString() : '';
+                    addLog(logData.message, time, logData.level);
+                } else if (data.type === 'complete') {
+                    const result = data.data;
+                    if (result.successful) {
+                        statusEl.className = 'status-badge status-success';
+                        statusEl.textContent = 'Success';
+                        addLog('--- Execution Completed Successfully ---');
+                    } else {
+                        statusEl.className = 'status-badge status-error';
+                        statusEl.textContent = 'Failed';
+                        addLog(`--- Execution Failed: ${result.error} ---`, '', 'ERROR');
+                    }
+                    eventSource.close();
+                }
+            };
+
+            eventSource.onerror = (err) => {
+                console.error('SSE Error:', err);
+                statusEl.className = 'status-badge status-error';
+                statusEl.textContent = 'Disconnected';
+                addLog('--- Connection lost ---', '', 'ERROR');
+                eventSource.close();
+            };
+        }
+
+        function addLog(message, time = '', level = '') {
+            const line = document.createElement('div');
+            line.className = 'log-line';
+
+            let html = '';
+            if (time) {
+                html += `<span class="log-meta">[${time}]</span>`;
+            }
+            if (level) {
+                html += `<span class="log-meta" style="color: ${getColorForLevel(level)}">[${level}]</span>`;
+            }
+            html += `<span class="log-message">${escapeHtml(message)}</span>`;
+
+            line.innerHTML = html;
+            logsContainer.appendChild(line);
+
+            // Auto-scroll
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        function getColorForLevel(level) {
+            switch (level.toUpperCase()) {
+                case 'ERROR': return '#f66';
+                case 'WARN': return '#fa4';
+                case 'INFO': return '#6cf';
+                default: return '#888';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+
+</html>

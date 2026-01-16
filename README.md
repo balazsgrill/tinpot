@@ -10,6 +10,8 @@
 - **Real-Time Feedback**: Stream logs from workers to the UI via Server-Sent Events (SSE).
 - **Synchronous & Asynchronous**: Trigger actions and wait for results, or fire-and-forget.
 - **Simple UI**: Clean web interface for triggering actions and viewing logs.
+- **Standalone Execution View**: dedicated page for viewing execution logs, suitable for embedding.
+
 
 ## Architecture
 
@@ -110,6 +112,20 @@ export PYTHONPATH=$(pwd)/venv/lib/python3.11/site-packages:$PYTHONPATH
 - `POST /api/actions/{name}/sync_execute`: Trigger an action and wait for the result.
 - `GET /api/executions/{id}/stream`: Stream logs and status via SSE.
 - `GET /api/executions/{id}/status`: Get execution status.
+
+## Web Interface
+
+The Coordinator provides a web interface for managing and monitoring actions.
+
+### Dashboard
+The main dashboard (`/`) allows you to view available actions and trigger them manually.
+
+### Execution View
+A standalone page for monitoring specific executions is available at:
+`GET /static/execution.html?id=<execution_id>`
+
+This page connects to the SSE stream and displays real-time logs and status. It is designed to be embeddable in iframes.
+
 
 ## Configuration
 

@@ -111,6 +111,23 @@ func main() {
 		w.Write([]byte(html))
 	})
 
+	// Serve Execution View with Injection
+	mux.HandleFunc("GET /static/execution.html", func(w http.ResponseWriter, r *http.Request) {
+		// Read from embedded FS
+		fileData, err := staticContent.ReadFile("static/execution.html")
+		if err != nil {
+			http.Error(w, "Failed to load execution.html", http.StatusInternalServerError)
+			return
+		}
+		html := string(fileData)
+		// Inject Base Path
+		script := fmt.Sprintf(`<script>window.BASE_PATH = "%s";</script>`, RootPath)
+		html = strings.Replace(html, "<!-- BASE_PATH_INJECTION -->", script, 1)
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(html))
+	})
+
 	// Health/Ready
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		if mgr.IsConnected() {
